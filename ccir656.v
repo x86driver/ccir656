@@ -12,8 +12,8 @@ ccir656 ccir656_0(.clk27M(clk27M), .rst(rst), .imgbtn(imgbtn), .data(data));
 initial begin
         clk27M = 0;
         rst = 1;
-        #10 rst = 0;
         #1000 imgbtn = 7'b101_1101;
+        #10 rst = 0;
 end
 
 always #5 clk27M = ~clk27M;
@@ -26,14 +26,15 @@ module ccir656(input wire clk27M,
                 input wire [6:0] imgbtn,
                 output reg [7:0] data);
 
-parameter [2:0] First3 = 0;
-parameter [2:0] Sec16 = 1;
-parameter [2:0] Third244 = 2;
-parameter [2:0] Fourth2 = 3;
-parameter [2:0] Fifth17 = 4;
-parameter [2:0] Sixth243 = 5;
+parameter [2:0] Idle = 0;
+parameter [2:0] First3 = 1;
+parameter [2:0] Sec16 = 2;
+parameter [2:0] Third244 = 3;
+parameter [2:0] Fourth2 = 4;
+parameter [2:0] Fifth17 = 5;
+parameter [2:0] Sixth243 = 6;
 
-reg [2:0] state = First3;
+reg [2:0] state = Idle;
 reg [2:0] preamble_state = 0;
 reg [2:0] frame_state = 0;
 
@@ -45,7 +46,7 @@ reg [7:0] count = 0;
 reg status_1 = 0;
 reg status_2 = 0;
 
-always @(rst) begin
+always @(posedge rst) begin
         if (rst == 1) begin
                 state = First3;
                 preamble_state = 0;
@@ -61,10 +62,12 @@ end
 
 always @(posedge clk27M) begin
         case (state)
+        Idle: begin
+        end
         First3: begin
                 status_1 = 8'hF1;
                 status_2 = 8'hEC;
-                frame_state = 1;
+                frame_state = 1; /* We can't always let it = 1 */
                 count = count + 1;
                 if (count == 3) begin
                         count = 0;
