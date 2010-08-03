@@ -1,3 +1,26 @@
+`define testbench
+
+`ifdef testbench
+module ccir656_tb;
+reg clk27M;
+reg rst;
+reg [6:0] imgbtn;
+wire [7:0] data;
+
+ccir656 ccir656_0(.clk27M(clk27M), .rst(rst), .imgbtn(imgbtn), .data(data));
+
+initial begin
+        clk27M = 0;
+        rst = 1;
+        #10 rst = 0;
+        #1000 imgbtn = 7'b101_1101;
+end
+
+always #5 clk27M = ~clk27M;
+
+endmodule
+`endif
+
 module ccir656(input wire clk27M,
                 input wire rst,
                 input wire [6:0] imgbtn,
@@ -22,6 +45,20 @@ reg [7:0] count = 0;
 reg status_1 = 0;
 reg status_2 = 0;
 
+always @(rst) begin
+        if (rst == 1) begin
+                state = First3;
+                preamble_state = 0;
+                frame_state = 0;
+                transmit208 = 0;
+                transmit1440 = 0;
+                transmit_num = 0;
+                count = 0;
+                status_1 = 0;
+                status_2 = 0;
+        end
+end
+
 always @(posedge clk27M) begin
         case (state)
         First3: begin
@@ -43,6 +80,8 @@ always @(posedge clk27M) begin
                         count = 0;
                         state = state + 1;
                 end
+        end
+        Third244: begin
         end
         endcase
 end
@@ -121,4 +160,3 @@ always @(preamble_state) begin
 end
 
 endmodule
-
