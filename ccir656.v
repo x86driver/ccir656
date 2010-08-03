@@ -6,8 +6,9 @@ reg clk27M;
 reg rst;
 reg [6:0] imgbtn;
 wire [7:0] data;
+wire led;
 
-ccir656 ccir656_0(.clk27M(clk27M), .rst(rst), .imgbtn(imgbtn), .data(data));
+ccir656 ccir656_0(.clk27M(clk27M), .rst(rst), .imgbtn(imgbtn), .data(data), .led(led));
 
 initial begin
         clk27M = 0;
@@ -24,7 +25,8 @@ endmodule
 module ccir656(input wire clk27M,
                 input wire rst,
                 input wire [6:0] imgbtn,
-                output reg [7:0] data);
+                output reg [7:0] data,
+                output reg led);
 
 parameter [2:0] Idle = 0;
 parameter [2:0] First3 = 1;
@@ -46,6 +48,9 @@ reg [7:0] count = 0;
 reg status_1 = 0;
 reg status_2 = 0;
 
+reg frame_enable = 0;
+reg preamble_enable = 0;
+
 always @(posedge rst) begin
         if (rst == 1) begin
                 state = First3;
@@ -57,6 +62,9 @@ always @(posedge rst) begin
                 count = 0;
                 status_1 = 0;
                 status_2 = 0;
+                frame_enable = 0;
+                preamble_enable = 0;
+                led = 0;
         end
 end
 
@@ -67,7 +75,7 @@ always @(posedge clk27M) begin
         First3: begin
                 status_1 = 8'hF1;
                 status_2 = 8'hEC;
-                frame_state = 1; /* We can't always let it = 1 */
+                frame_enable = 1; /* We can't always let it = 1 */
                 count = count + 1;
                 if (count == 3) begin
                         count = 0;
@@ -77,7 +85,7 @@ always @(posedge clk27M) begin
         Sec16: begin
                 status_1 = 8'hB6;
                 status_2 = 8'hAB;
-                frame_state = 1;
+                frame_enable = 1;
                 count = count + 1;
                 if (count == 16) begin
                         count = 0;
@@ -97,6 +105,7 @@ always @(transmit208) begin
                         transmit208 = 0;
                         transmit_num = 0;
                         frame_state = frame_state + 1;
+                        frame_enable = 1;
                 end
         end
 end
@@ -108,58 +117,65 @@ always @(transmit1440) begin
                 if (transmit_num == 1440) begin
                         transmit1440 = 0;
                         transmit_num = 0;
+                        frame_enable = 0;
                         frame_state = 0;
                 end
         end
 end
 
-always @(frame_state) begin
-        case (frame_state)
-        0: begin
+always @(frame_enable, frame_state) begin
+        if (frame_enable == 1) begin
+                case (frame_state)
+                0: begin
+                        frame_enable = 0;
+                        preamble_enable = 1;
+                end
+                1: begin
+                        data = status_1;
+                        frame_state = frame_state + 1;
+                end
+                2: begin
+                        frame_enable = 0;
+                        transmit208 = 1;
+                end
+                3: begin
+                        frame_enable = 0;
+                        preamble_enable = 1;
+                end
+                4: begin
+                        data = status_2;
+                        frame_state = frame_state + 1;
+                end
+                5: begin
+                        frame_enable = 0;
+                        transmit1440 = 1;
+                end
+                6: begin
+                end
+                endcase
         end
-        1: begin
-                preamble_state = 1;
-        end
-        2: begin
-                data = status_1;
-                frame_state = frame_state + 1;
-        end
-        3: begin
-                transmit208 = 1;
-        end
-        4: begin
-                preamble_state = 1;
-        end
-        5: begin
-                data = status_2;
-                frame_state = frame_state + 1;
-        end
-        6: begin
-                transmit1440 = 1;
-        end
-        7: begin
-        end
-        endcase
 end
 
-always @(preamble_state) begin
+always @(preamble_enable, preamble_state) begin
+        if (preamble_enable == 1) begin
         case (preamble_state)
         0: begin
-        end
-        1: begin
                 data = 8'hFF;
                 preamble_state = preamble_state + 1;
         end
-        2: begin
+        1: begin
                 data = 8'h0;
                 preamble_state = preamble_state + 1;
         end
-        3: begin
+        2: begin
                 data = 8'h0;
+                preamble_enable = 0;
                 preamble_state = 0;
                 frame_state = frame_state + 1;
+                frame_enable = 1;
         end
         endcase
+        end
 end
 
 endmodule
